@@ -82,7 +82,8 @@ argv_loop:
     pop ecx
     loop    argv_loop
     
-    ohad:
+
+encode_loop:
     ;; read char from stdin 
     mov     eax, 0x3        ; system call for read()
     mov     ebx, [infile]     ; file descriptor for stdin
@@ -90,16 +91,20 @@ argv_loop:
     mov     edx, 1         ; number of bytes to read
     int 0x80 
     
-    ;; encode char
-    mov     eax, [char_buff]   ; eax = *char_buff
-    add     eax, 1             ; encode char
+    ;; check if eax > 0
+    cmp    eax, 0
+    jle    end_encode_loop
+    push   dword [char_buff]
+    call   encode
+    mov [char_buff], eax
+    add     esp, 4
 
     ;; write char to stdout
-    mov [char_buff], eax 
     mov ecx, char_buff
     mov eax, 0x4                 ; system call for write()
     mov ebx, [outfile]            ; file descriptor for stdout 
     mov edx, 1
+    int 0x80
 
     ; print new line
     mov     eax, 0x4        ; system call for write()
@@ -107,16 +112,27 @@ argv_loop:
     mov     ecx, new_line
     mov     edx, 1
     int 0x80
+    jmp    encode_loop
 
+end_encode_loop:
     popad                   ; Restore caller state (registers)
     add     esp, 4          ; Restore caller state
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
 
 
-
-
-
-
-
 encode:
+    ;; fuck state of registers
+    mov eax , [esp + 4]       ; eax = char
+
+    ;; check if char is between 'a' and 'z'
+    cmp eax, 'A'
+    jl return
+    ;;else
+    cmp eax, 'z'
+    jg return
+    ;; encode char
+    add     eax, 1             ; encode char
+return:
+    ret
+    
