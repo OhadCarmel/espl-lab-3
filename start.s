@@ -1,5 +1,8 @@
 section .data
     new_line db 0x0a
+    char_buff dd 0
+    infile dd 0
+    outfile dd 1
 
 section .text
     global _start
@@ -79,7 +82,41 @@ argv_loop:
     pop ecx
     loop    argv_loop
     
+    ohad:
+    ;; read char from stdin 
+    mov     eax, 0x3        ; system call for read()
+    mov     ebx, [infile]     ; file descriptor for stdin
+    mov     ecx, char_buff  
+    mov     edx, 1         ; number of bytes to read
+    int 0x80 
+    
+    ;; encode char
+    mov     eax, [char_buff]   ; eax = *char_buff
+    add     eax, 1             ; encode char
+
+    ;; write char to stdout
+    mov [char_buff], eax 
+    mov ecx, char_buff
+    mov eax, 0x4                 ; system call for write()
+    mov ebx, [outfile]            ; file descriptor for stdout 
+    mov edx, 1
+
+    ; print new line
+    mov     eax, 0x4        ; system call for write()
+    mov     ebx, 1          ; file descriptor for stdout
+    mov     ecx, new_line
+    mov     edx, 1
+    int 0x80
+
     popad                   ; Restore caller state (registers)
     add     esp, 4          ; Restore caller state
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
+
+
+
+
+
+
+
+encode:
