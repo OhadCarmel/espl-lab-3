@@ -49,6 +49,7 @@ system_call:
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
 
+
 main:
     push    ebp             ; Save caller state
     mov     ebp, esp
@@ -66,8 +67,10 @@ argv_loop:
     add     eax, ebx        ; eax = eax + i * 4
     mov     ecx, [eax]      ; ecx = *(argv + i * 4)
     push    ecx
+    call    check_inout_files_from_arg
     call    strlen
     pop     ecx
+
     mov     edx, eax        ; edx = strlen(ecx)
     mov     eax, 0x4        ; system call for write()
     mov     ebx, 1          ; file descriptor for stdout
@@ -85,10 +88,10 @@ argv_loop:
 
 encode_loop:
     ;; read char from stdin 
-    mov     eax, 0x3        ; system call for read()
-    mov     ebx, [infile]     ; file descriptor for stdin
+    mov     eax, 0x3           ; system call for read()
+    mov     ebx, [infile]      ; file descriptor for stdin
     mov     ecx, char_buff  
-    mov     edx, 1         ; number of bytes to read
+    mov     edx, 1             ; number of bytes to read
     int 0x80 
     
     ;; check if eax > 0
@@ -101,20 +104,35 @@ encode_loop:
 
     ;; write char to stdout
     mov ecx, char_buff
-    mov eax, 0x4                 ; system call for write()
-    mov ebx, [outfile]            ; file descriptor for stdout 
+    mov eax, 0x4               ; system call for write()
+    mov ebx, [outfile]         ; file descriptor for out file 
     mov edx, 1
     int 0x80
 
     ; print new line
-    mov     eax, 0x4        ; system call for write()
-    mov     ebx, 1          ; file descriptor for stdout
+    mov     eax, 0x4           ; system call for write()
+    mov     ebx, [outfile]     ; file descriptor for out file
     mov     ecx, new_line
     mov     edx, 1
     int 0x80
     jmp    encode_loop
 
 end_encode_loop:
+    ;; Close input/output files
+    cmp dword [infile], 0
+    jne close_output_file
+    mov     eax, 0x6           ; system call for close()
+    mov     ebx, [infile]      ; file descriptor
+    int 0x80
+
+close_output_file:
+    cmp dword [outfile], 1
+    jne main_end
+    mov     eax, 0x6           ; system call for close()
+    mov     ebx, [outfile]     ; file descriptor
+    int 0x80
+
+main_end:
     popad                   ; Restore caller state (registers)
     add     esp, 4          ; Restore caller state
     pop     ebp             ; Restore caller state
@@ -127,12 +145,50 @@ encode:
 
     ;; check if char is between 'a' and 'z'
     cmp eax, 'A'
-    jl return
+    jl encode_return
     ;;else
     cmp eax, 'z'
-    jg return
+    jg encode_return
     ;; encode char
     add     eax, 1             ; encode char
-return:
+encode_return:
     ret
     
+
+
+check_inout_files_from_arg:
+    push    ebp             ; Save caller state
+    mov     ebp, esp
+    pushad                  ; Save some more caller state
+
+    mov ebx, [ebp+8]
+    ;; Check for output file
+    cmp word [ebx], '-'+(256*'o')
+    jne check_input_file
+    add ebx, 2
+    mov eax, 5          ; open syscall
+    mov ecx, 0x241      ; O_WRONLY | O_CREAT | O_TRUNC
+    mov edx, 0644o      ; File permissions -rw-r--r--
+    int 0x80
+    sub ebx, 2
+    cmp eax, 0
+    jl check_input_file
+    mov [outfile], eax
+
+check_input_file:
+    ;; Check for input file
+    cmp word [ebx], '-'+(256*'i')
+    jne check_inout_files_from_arg_end
+    add ebx, 2
+    mov eax, 5          ; open syscall
+    mov ecx, 0x0        ; O_RDONLY
+    int 0x80
+    
+    cmp eax, 0
+    jl check_inout_files_from_arg_end
+    mov [infile], eax
+
+check_inout_files_from_arg_end:
+    popad                   ; Restore caller state (registers)
+    pop     ebp             ; Restore caller state
+    ret                     ; Back to caller
