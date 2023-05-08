@@ -1,7 +1,10 @@
 section .text
-global _start
-global system_call
+    global _start
+    global system_call
+    global main
+
 extern main
+extern strlen
 _start:
     pop    dword ecx    ; ecx = argc
     mov    esi,esp      ; esi = argv
@@ -20,6 +23,7 @@ _start:
     mov     eax,1
     int     0x80
     nop
+  
         
 system_call:
     push    ebp             ; Save caller state
@@ -32,6 +36,37 @@ system_call:
     mov     ecx, [ebp+16]   ; Next argument...
     mov     edx, [ebp+20]   ; Next argument...
     int     0x80            ; Transfer control to operating system
+    mov     [ebp-4], eax    ; Save returned value...
+    popad                   ; Restore caller state (registers)
+    mov     eax, [ebp-4]    ; place returned value where caller can see it
+    add     esp, 4          ; Restore caller state
+    pop     ebp             ; Restore caller state
+    ret                     ; Back to caller
+
+main:
+    push    ebp             ; Save caller state
+    mov     ebp, esp
+    sub     esp, 4          ; Leave space for local var on stack
+    pushad                  ; Save some more caller state
+
+    ; mov     ecx, [ebp+8]    ; Copy function argc to registers: leftmost...
+
+; argv_loop:
+    
+    
+;     loop    argv_loop       ; Next argument...
+
+    mov     eax, 0x4                    ; system call for write()
+    mov     ebx, 1                      ; file descriptor for stdout
+    mov     ecx, [ebp + 12]                ; pointer to the message
+    push    [ecx]
+
+
+    int 0x80                        ; call kernel
+
+
+
+
     mov     [ebp-4], eax    ; Save returned value...
     popad                   ; Restore caller state (registers)
     mov     eax, [ebp-4]    ; place returned value where caller can see it

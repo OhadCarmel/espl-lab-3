@@ -1,5 +1,6 @@
 #include "Util.h"
 
+
 #define SYS_WRITE 4
 #define STDOUT 1
 #define SYS_OPEN 5
@@ -12,7 +13,10 @@ extern int system_call();
 
 int main (int argc , char* argv[], char* envp[])
 {
-  /*Complete the task here*/
-
+  int i;
+  for (i = 0; i < argc ; i ++)
+  {
+    system_call(SYS_WRITE , STDOUT, argv[i], strlen(argv[i]));
+  }
   return 0;
 }
