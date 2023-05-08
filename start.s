@@ -1,9 +1,12 @@
+section .data
+    new_line db 0x0a
+
 section .text
     global _start
     global system_call
     global main
 
-extern main
+; extern main
 extern strlen
 _start:
     pop    dword ecx    ; ecx = argc
@@ -49,27 +52,34 @@ main:
     sub     esp, 4          ; Leave space for local var on stack
     pushad                  ; Save some more caller state
 
-    ; mov     ecx, [ebp+8]    ; Copy function argc to registers: leftmost...
+    mov     ecx, [ebp+8]    ; i = argc
 
-; argv_loop:
+argv_loop:
+    push    ecx
+    mov     eax, [ebp+12]   ; eax = argv
+    mov     ebx, [ebp+8]    ; ebx = argc
+    sub     ebx, ecx        ; ebx = i
+    shl     ebx, 2          ; ebx = i * 4
+    add     eax, ebx        ; eax = eax + i * 4
+    mov     ecx, [eax]      ; ecx = *(argv + i * 4)
+    push    ecx
+    call    strlen
+    pop     ecx
+    mov     edx, eax        ; edx = strlen(ecx)
+    mov     eax, 0x4        ; system call for write()
+    mov     ebx, 1          ; file descriptor for stdout
+    int 0x80
+    ; print new line
+    mov     eax, 0x4        ; system call for write()
+    mov     ebx, 1          ; file descriptor for stdout
+    mov     ecx, new_line
+    mov     edx, 1
+    int 0x80
+
+    pop ecx
+    loop    argv_loop
     
-    
-;     loop    argv_loop       ; Next argument...
-
-    mov     eax, 0x4                    ; system call for write()
-    mov     ebx, 1                      ; file descriptor for stdout
-    mov     ecx, [ebp + 12]                ; pointer to the message
-    push    [ecx]
-
-
-    int 0x80                        ; call kernel
-
-
-
-
-    mov     [ebp-4], eax    ; Save returned value...
     popad                   ; Restore caller state (registers)
-    mov     eax, [ebp-4]    ; place returned value where caller can see it
     add     esp, 4          ; Restore caller state
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
